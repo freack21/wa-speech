@@ -8,7 +8,7 @@
   "keywords": [],
   "author": "freack21",
   "license": "ISC",
-  "description": "WhatsApp Notification to Speech backend",
+  "description": "WhatsApp Notifier with Speech",
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
