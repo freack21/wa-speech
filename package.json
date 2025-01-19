@@ -1,0 +1,19 @@
+{
+  "name": "wa-speech",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "freack21",
+  "license": "ISC",
+  "description": "WhatsApp Notification to Speech backend",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.1",
+    "whatsauto.js": "^0.1.3"
+  }
+}
