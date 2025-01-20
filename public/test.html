@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Socket.IO Client</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      h1 {
+        color: #333;
+      }
+      .container {
+        max-width: 600px;
+        margin: auto;
+      }
+      .input-group {
+        margin-bottom: 15px;
+      }
+      .input-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      .input-group input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
+      button {
+        padding: 10px 15px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      .response {
+        margin-top: 20px;
+        font-size: 16px;
+        color: green;
+      }
+    </style>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <h1>WA-Speech Test!</h1>
+      <div class="input-group" id="login-form">
+        <label for="session-name">Session Name</label>
+        <input type="text" id="session-name" placeholder="Enter session name" />
+        <button onclick="add_session()">Login</button>
+      </div>
+      <div class="input-group" id="logout-form">
+        <button style="background-color: orangered" onclick="remove_session()">
+          Logout
+        </button>
+      </div>
+      <pre class="response" id="response"></pre>
+      <img
+        src=""
+        alt=""
+        id="qr"
+        style="display: none; width: 240px; height: 240px"
+      />
+    </div>
+
+    <script>
+      const socket = io("http://localhost:3210");
+      var responseDiv = document.getElementById("response");
+      var qr = document.getElementById("qr");
+      var loginForm = document.getElementById("login-form");
+      var logoutForm = document.getElementById("logout-form");
+
+      if (localStorage.getItem("session_name")) {
+        loginForm.style.display = "none";
+        logoutForm.style.display = "block";
+      } else {
+        loginForm.style.display = "block";
+        logoutForm.style.display = "none";
+      }
+
+      socket.on("connect", () => {
+        responseDiv.textContent = `Connected to Server!`;
+        socket.emit("login", localStorage.getItem("session_name") || "");
+      });
+
+      socket.on("wa_qr", (data) => {
+        responseDiv.textContent = `QR Code received!`;
+        qr.src = data.img_qr;
+        qr.style.display = "block";
+      });
+
+      socket.on("wa_connected", () => {
+        responseDiv.textContent = `WhatsApp connected!`;
+      });
+
+      socket.on("wa_disconnected", () => {
+        responseDiv.textContent = `WhatsApp disconnected!`;
+      });
+
+      socket.on("wa_group_msg", (msg) => {
+        responseDiv.textContent = `[Group]\n${JSON.stringify(msg, null, 2)}`;
+      });
+
+      socket.on("wa_private_msg", (msg) => {
+        responseDiv.textContent = `[Private]\n${JSON.stringify(msg, null, 2)}`;
+      });
+
+      function add_session() {
+        var session_name = document.getElementById("session-name").value;
+        socket.emit("add_session", session_name);
+        localStorage.setItem("session_name", session_name);
+      }
+
+      function remove_session() {
+        socket.emit("remove_session", localStorage.getItem("session_name"));
+        localStorage.removeItem("session_name");
+      }
+    </script>
+  </body>
+</html>

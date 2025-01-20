@@ -19,6 +19,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.use(cors());
 
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/test.html"));
+});
+
 app.use((req, res, next) => {
   res.status(200).json({
     message: "Server is running!",
@@ -33,13 +37,16 @@ const io = new Server(server, {
 });
 
 const sessionPath = path.join(__dirname, "sessions.json");
+var connectedSessions = {};
 function loadSessions() {
   let session = {};
   try {
     if (fs.existsSync(sessionPath)) {
       session = JSON.parse(fs.readFileSync(sessionPath));
     }
-  } catch (error) {}
+  } catch (error) {
+    console.log(`Error loading sessions: ${error}`);
+  }
   return session;
 }
 
@@ -65,43 +72,58 @@ function addSession(id, session) {
     }
     sessions[id] = session;
     fs.writeFileSync(sessionPath, JSON.stringify(sessions));
-  } catch (error) {}
+  } catch (error) {
+    console.log(`Error adding session: ${error}`);
+  }
 }
 
 function removeSession(session) {
   try {
     let sessions = loadSessions();
+    connectedSessions[session]?.autoWA?.end();
+    delete connectedSessions[session];
     delete sessions[getIdSocket(session)];
     fs.writeFileSync(sessionPath, JSON.stringify(sessions));
-  } catch (error) {}
+  } catch (error) {
+    console.log(`Error removing session: ${error}`);
+  }
 }
 
 async function startWhatsAuto(session) {
-  const autoWA = new WAuto.AutoWA(session);
-  const id = getIdSocket(session);
-  autoWA.event.onQRUpdated(async (qr) => {
-    io.to(id).emit("wa_qr", { qr, img_qr: await qrcode.toDataURL(qr) });
-  });
-  autoWA.event.onConnected(() => {
-    io.to(id).emit("wa_connected", session);
-  });
-  autoWA.event.onDisconnected(() => {
-    io.to(id).emit("wa_disconnected", session);
-  });
-  autoWA.event.onGroupMessageReceived((message) => {
-    io.to(id).emit("wa_group_msg", message);
-  });
-  autoWA.event.onPrivateMessageReceived((message) => {
-    io.to(id).emit("wa_private_msg", message);
-  });
-  await autoWA.initialize();
-}
-
-async function startWhatsAutos() {
-  const sessions = loadSessions();
-  for (const key in sessions) {
-    const session = sessions[key];
-    if (session) await startWhatsAuto(session);
+  if (!connectedSessions[session]) {
+    connectedSessions[session] = { autoWA: null, connected: false };
+  }
+  if (connectedSessions[session].connected) return;
+  try {
+    const autoWA = new WAuto.AutoWA(session);
+    if (!connectedSessions[session]?.autoWA) {
+      connectedSessions[session].autoWA = autoWA;
+    }
+    autoWA.event.onQRUpdated(async (qr) => {
+      io.to(getIdSocket(session)).emit("wa_qr", {
+        qr,
+        img_qr: await qrcode.toDataURL(qr),
+      });
+    });
+    autoWA.event.onConnected(() => {
+      io.to(getIdSocket(session)).emit("wa_connected", session);
+      connectedSessions[session].connected = true;
+    });
+    autoWA.event.onDisconnected(() => {
+      io.to(getIdSocket(session)).emit("wa_disconnected", session);
+      connectedSessions[session].connected = false;
+    });
+    autoWA.event.onGroupMessageReceived(async (message) => {
+      const groupInfo = await autoWA.sock.groupMetadata(message.from);
+      message.groupName = groupInfo.subject;
+      io.to(getIdSocket(session)).emit("wa_group_msg", message);
+    });
+    autoWA.event.onPrivateMessageReceived((message) => {
+      io.to(getIdSocket(session)).emit("wa_private_msg", message);
+    });
+    await autoWA.initialize();
+  } catch (error) {
+    console.log(`Error starting WhatsAuto: ${error}`);
   }
 }
 
@@ -125,8 +147,6 @@ io.on("connection", (socket) => {
     removeSession(session);
   });
 });
-
-startWhatsAutos();
 
 server.listen(PORT, () => {
   console.log("Server running on http://localhost:" + PORT);
